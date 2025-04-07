@@ -1,5 +1,5 @@
 from fastmcp import FastMCP, Image, Context
-from fastmcp.prompts.base import UserMessage, AssistantMessage
+from fastmcp.prompts.base import UserMessage, AssistantMessage, Message
 import json
 import time
 import os
@@ -105,18 +105,18 @@ def generate_image(
     image_path, image_url = poll_request(prompt_id, "10", "images")
     ctx.info("Image generated")
 
-    return {"image_url": image_url}
+    return {"image_url": image_url, "image_path": image_path}
 
 @mcp.prompt(name="Optimize prompt", description="Optimize the image generation prompt for better results")
 def optimize_image_prompt(
     user_prompt: Annotated[str, Field(description="The text prompt to optimize. e.g. 'A beautiful sunset over the mountains'")],
-    ):
+    ) -> list[Message]:
     """Optimize the image generation prompt for better results"""
 
     system_prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", "optimize_prompt.txt")
     with open(system_prompt_path, 'r', encoding='utf-8') as f:
         system_prompt = f.read()
-    return[
+    return [
         UserMessage(system_prompt),
         UserMessage(user_prompt)
     ]
