@@ -1,12 +1,19 @@
-from mcp.server.fastmcp import FastMCP, Image, Context
+from fastmcp import FastMCP, Image, Context
+from fastmcp.prompts.base import UserMessage, AssistantMessage
 import json
 import time
 import os
 import requests
 from pathlib import Path
 import random
+import logging
+from pydantic import Field
+from typing import Annotated
 
-mcp = FastMCP("Comfy MCP Server", log_1evel='ERROR')
+
+logger = logging.getLogger("mcp")
+
+mcp = FastMCP("Comfy MCP Server", log_level='ERROR')
 host = os.environ.get("COMFY_URL")
 
 def poll_request(prompt_id, output_id, output_type, callback=None):
@@ -20,7 +27,7 @@ def poll_request(prompt_id, output_id, output_type, callback=None):
     返回:
     - 任务输出结果
     """
-    print(f"开始轮询请求: {prompt_id}")
+    logger.info(f"开始轮询请求: {prompt_id}")
     while True:
         try:
             response = requests.get(
@@ -30,7 +37,7 @@ def poll_request(prompt_id, output_id, output_type, callback=None):
             result = response.json()
             if prompt_id in result and result[prompt_id].get('outputs'):
                 outputs = result[prompt_id]['outputs']
-                print(f"ComfyUI返回结果: {outputs}")
+                logger.info(f"ComfyUI返回结果: {outputs}")
                 
                 if outputs and output_id in outputs:
                     # 获取输出路径
@@ -42,29 +49,36 @@ def poll_request(prompt_id, output_id, output_type, callback=None):
                     output_path = str(Path(output_data["subfolder"]) / output_data["filename"])
                     
                     image_url = f"{host.rstrip('/')}/view?filename={output_data.get('filename')}&subfolder={output_data.get('subfolder')}&type=output"
-                    print(f"生成的文件路径: {output_path}")
-                    print(f"在线访问路径: {image_url}")
+                    logger.info(f"生成的文件路径: {output_path}")
+                    logger.info(f"在线访问路径: {image_url}")
                     if callback:
                         callback(prompt_id, output_path, image_url)
                     return output_path, image_url
                 else:
-                    print("未找到输出")
+                    logger.info("未找到输出")
                     if callback:
                         callback(prompt_id, None)
                     return None
                     
-            print(f"正在等待生成: {prompt_id}")
+            logger.info(f"正在等待生成: {prompt_id}")
             time.sleep(3)
         except Exception as e:
-            print(f"轮询请求失败: {e}")
+            logger.error(f"轮询请求失败: {e}")
             time.sleep(2)
 
-@mcp.tool()
-def generate_image(prompt: str, width: int, height: int, ctx: Context):
-    """generate image using ComfyUI text_to_image workflows"""
+@mcp.tool(name="Generate Image", description="Generate image using ComfyUI text_to_image workflows. the prompt must in english language. ")
+def generate_image(
+    prompt: Annotated[str, Field(description="The text prompt to generate the image. prompt must in english language. e.g. 'A beautiful sunset over the mountains'")], 
+    width: Annotated[int, Field(description="The width of the generated image. Must be a multiple of 8.")], 
+    height: Annotated[int, Field(description="The height of the generated image. Must be a multiple of 8.")], 
+    ctx: Context):
+    """generate image using ComfyUI text_to_image workflows. the prompt must in english language. 
+
+    Returns:
+        - dict: A dictionary containing the URL of the generated image with the key 'image_url'.
+    """
     
     # 读取工作流文件: workflows/text_to_image.json
-    import os
     workflow_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workflows", "text_to_image.json")
     with open(workflow_path, 'r', encoding='utf-8') as f:
         workflow = json.load(f)
@@ -93,6 +107,19 @@ def generate_image(prompt: str, width: int, height: int, ctx: Context):
 
     return {"image_url": image_url}
 
+@mcp.prompt(name="Optimize prompt", description="Optimize the image generation prompt for better results")
+def optimize_image_prompt(
+    user_prompt: Annotated[str, Field(description="The text prompt to optimize. e.g. 'A beautiful sunset over the mountains'")],
+    ):
+    """Optimize the image generation prompt for better results"""
+
+    system_prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", "optimize_prompt.txt")
+    with open(system_prompt_path, 'r', encoding='utf-8') as f:
+        system_prompt = f.read()
+    return[
+        UserMessage(system_prompt),
+        UserMessage(user_prompt)
+    ]
 
 def run_server():
     errors = []
