@@ -66,7 +66,7 @@ def poll_request(prompt_id, output_id, output_type, callback=None):
             logger.error(f"轮询请求失败: {e}")
             time.sleep(2)
 
-@mcp.tool(name="Generate Image", description="Generate image using ComfyUI text_to_image workflows. the prompt must in english language. ")
+@mcp.tool(name="generate_image", description="Generate image using ComfyUI text_to_image workflows. the prompt must in english language. ")
 def generate_image(
     prompt: Annotated[str, Field(description="The text prompt to generate the image. prompt must in english language. e.g. 'A beautiful sunset over the mountains'")], 
     width: Annotated[int, Field(description="The width of the generated image. Must be a multiple of 8.")], 
