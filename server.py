@@ -74,6 +74,12 @@ def generate_image(
     ctx: Context):
     """generate image using ComfyUI text_to_image workflows. the prompt must in english language. 
 
+    Args:
+        prompt (str): The text prompt to generate the image. Must be in English.
+        width (int): The width of the generated image. Must be a multiple of 8.
+        height (int): The height of the generated image. Must be a multiple of 8.
+        ctx (Context): The context object for logging and managing the request.
+        
     Returns:
         - dict: A dictionary containing the URL of the generated image with the key 'image_url'.
     """
