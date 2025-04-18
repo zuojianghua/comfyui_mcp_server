@@ -113,6 +113,53 @@ def generate_image(
 
     return {"image_url": image_url, "image_path": image_path}
 
+@mcp.tool(name="generate_background_image", description="Generate background image using ComfyUI text_to_image workflows. the prompt must in english language. Usually used for generating background or cover images. There is no text on the generated image.")
+def generate_background_image(
+    prompt: Annotated[str, Field(description="The text prompt to generate the background image. prompt must in english language. e.g. 'A Simple, abstract, and clean poster design with a theme of artificial intelligence and technology style illustration. '")], 
+    width: Annotated[int, Field(description="The width of the generated image. Must be a multiple of 8.")], 
+    height: Annotated[int, Field(description="The height of the generated image. Must be a multiple of 8.")], 
+    ctx: Context):
+    """generate image using ComfyUI text_to_image workflows. the prompt must in english language. Usually used for generating background or cover images. There is no text on the generated image.
+
+    Args:
+        prompt (str): The text prompt to generate the image. Must be in English. e.g. 'A Simple, abstract, and clean poster design with a theme of artificial intelligence and technology style illustration. 
+        width (int): The width of the generated image. Must be a multiple of 8.
+        height (int): The height of the generated image. Must be a multiple of 8.
+        ctx (Context): The context object for logging and managing the request.
+        
+    Returns:
+        - dict: A dictionary containing the URL of the generated image with the key 'image_url'.
+    """
+    
+    # 读取工作流文件: workflows/text_to_image.json
+    workflow_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "workflows", "background_api.json")
+    with open(workflow_path, 'r', encoding='utf-8') as f:
+        workflow = json.load(f)
+
+    # 更新工作流参数
+    workflow["4"]["inputs"]["text"] = f"x1a0h0ngshuN0Text.\n\n{prompt}\n\nOnly background without title text. No title. No subtitle."
+    workflow["11"]["inputs"]["width"] = int(width/8) * 8
+    workflow["11"]["inputs"]["height"] = int(height/8) * 8
+    # 生成12位随机整数作为seed
+    workflow["5"]["inputs"]["seed"] = random.randint(100000000000, 999999999999)
+
+    # 发送请求
+    response = requests.post(
+        f"{host}/prompt",
+        json={"prompt": workflow},
+        headers={'Content-Type': 'application/json'},
+        timeout=600
+    )
+    ctx.info("Submitted prompt")
+    response.raise_for_status()
+    prompt_id = response.json()['prompt_id']
+    
+    ctx.info("Checking status...")
+    image_path, image_url = poll_request(prompt_id, "13", "images")
+    ctx.info("Image generated")
+
+    return {"image_url": image_url, "image_path": image_path}
+
 @mcp.prompt(name="Optimize prompt", description="Optimize the image generation prompt for better results")
 def optimize_image_prompt(
     user_prompt: Annotated[str, Field(description="The text prompt to optimize. e.g. 'A beautiful sunset over the mountains'")],
@@ -126,6 +173,13 @@ def optimize_image_prompt(
         UserMessage(system_prompt),
         UserMessage(user_prompt)
     ]
+
+@mcp.resource("prompt://cover_prompt", name="cover_prompt", description="AI Prompt for generating cover images")
+def cover_prompt() -> str:
+    """AI Prompt for generating cover images"""
+    with open("prompts/cover_prompt.txt", "r", encoding="utf-8") as f:
+        prompt = f.read()
+    return prompt
 
 def run_server():
     errors = []
